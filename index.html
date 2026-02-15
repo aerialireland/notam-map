@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOTAM Map — Aerial</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, "system-ui", "Segoe UI", Roboto, Oxygen, Ubuntu, sans-serif;
+    background: #e5e7eb;
+    color: #1f2937;
+  }
+
+  /* ─── Header bar ─── */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 24px;
+    background: #fff;
+    border-bottom: 1px solid #d1d5db;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  .top-bar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .top-bar-left img {
+    height: 40px;
+  }
+  .top-bar-left h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #1f2937;
+  }
+  .top-bar-left .subtitle {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: -2px;
+  }
+  .top-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #374151;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: #f3f4f6; border-color: #9ca3af; }
+  .btn-green {
+    background: #2d6a1e;
+    color: #fff;
+    border-color: #2d6a1e;
+  }
+  .btn-green:hover { background: #245516; }
+  .tile-btns {
+    display: flex;
+    gap: 4px;
+  }
+  .tile-btn {
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    color: #6b7280;
+    transition: all 0.15s;
+  }
+  .tile-btn:hover { background: #f9fafb; }
+  .tile-btn.active {
+    background: #2d6a1e;
+    color: #fff;
+    border-color: #2d6a1e;
+  }
+
+  /* ─── Main layout ─── */
+  .main-content {
+    display: flex;
+    height: calc(100vh - 65px);
+    gap: 0;
+  }
+
+  /* ─── Sidebar ─── */
+  .sidebar {
+    width: 320px;
+    min-width: 320px;
+    background: #fff;
+    border-right: 1px solid #d1d5db;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .sidebar-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid #e5e7eb;
+    font-weight: 600;
+    font-size: 14px;
+    color: #1f2937;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sidebar-header .count {
+    background: #2d6a1e;
+    color: #fff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+  }
+
+  /* ─── Legend section ─── */
+  .legend-section {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .legend-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #9ca3af;
+    margin-bottom: 8px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    margin: 2px 0;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #374151;
+    transition: all 0.12s;
+  }
+  .legend-item:hover { background: #f9fafb; }
+  .legend-item.hidden { opacity: 0.35; text-decoration: line-through; }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    border: 1px solid rgba(0,0,0,0.15);
+  }
+  .legend-count {
+    margin-left: auto;
+    font-size: 11px;
+    font-weight: 600;
+    color: #9ca3af;
+    background: #f3f4f6;
+    padding: 1px 6px;
+    border-radius: 8px;
+  }
+
+  /* ─── NOTAM list ─── */
+  .notam-list {
+    padding: 8px;
+  }
+  .notam-card {
+    padding: 10px 12px;
+    margin: 4px 0;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    cursor: pointer;
+    transition: all 0.12s;
+    font-size: 12px;
+  }
+  .notam-card:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+  }
+  .notam-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+  .notam-card-id {
+    font-weight: 600;
+    font-size: 12px;
+    color: #1f2937;
+  }
+  .notam-card-type {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+  .notam-card-desc {
+    color: #6b7280;
+    line-height: 1.4;
+    font-size: 11px;
+    max-height: 40px;
+    overflow: hidden;
+  }
+  .notam-card-meta {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+    font-size: 10px;
+    color: #9ca3af;
+  }
+
+  /* ─── Map container ─── */
+  .map-wrap {
+    flex: 1;
+    position: relative;
+  }
+  #map {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ─── Map overlays ─── */
+  .map-info {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.95);
+    padding: 10px 14px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border: 1px solid #e5e7eb;
+    font-size: 12px;
+    color: #374151;
+    backdrop-filter: blur(4px);
+  }
+  .map-info h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #1f2937;
+    margin-bottom: 4px;
+  }
+  .map-info .stat {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 2px 0;
+  }
+  .map-info .stat-val {
+    font-weight: 600;
+    color: #2d6a1e;
+  }
+
+  /* ─── Popups ─── */
+  .leaflet-popup-content-wrapper {
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+  .popup-title { font-size: 13px; font-weight: 600; color: #2d6a1e; margin-bottom: 4px; }
+  .popup-type {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #9ca3af;
+    margin-bottom: 4px;
+  }
+  .popup-desc { font-size: 11px; line-height: 1.4; color: #4b5563; max-width: 320px; }
+  .popup-dates { font-size: 10px; color: #9ca3af; margin-top: 6px; border-top: 1px solid #e5e7eb; padding-top: 4px; }
+  .popup-aero-notam {
+    font-size: 11px;
+    color: #4b5563;
+    margin: 3px 0;
+    padding: 4px 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  /* ─── Loading overlay ─── */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(229,231,235,0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    transition: opacity 0.3s;
+  }
+  .loading-overlay.hidden { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #e5e7eb;
+    border-top-color: #2d6a1e;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text {
+    margin-top: 14px;
+    font-size: 14px;
+    color: #6b7280;
+  }
+  .loading-sub {
+    margin-top: 4px;
+    font-size: 11px;
+    color: #9ca3af;
+  }
+  .error-msg {
+    color: #dc2626;
+    font-size: 14px;
+    text-align: center;
+    max-width: 400px;
+    line-height: 1.5;
+  }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .top-bar-right .tile-btns { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── Top Bar ─── -->
+<div class="top-bar">
+  <div class="top-bar-left">
+    <img src="https://uf101.aerial.ie/Aerial25-Green-Small.png" alt="Aerial" onerror="this.style.display='none'">
+    <div>
+      <h1>NOTAM Map</h1>
+      <div class="subtitle" id="pib-subtitle">Loading NOTAM data...</div>
+    </div>
+  </div>
+  <div class="top-bar-right">
+    <div class="tile-btns">
+      <button class="tile-btn" onclick="setTiles('dark')" id="btn-dark">Dark</button>
+      <button class="tile-btn active" onclick="setTiles('satellite')" id="btn-satellite">Satellite</button>
+      <button class="tile-btn" onclick="setTiles('street')" id="btn-street">Street</button>
+    </div>
+    <a href="uf101-creator.html" class="btn btn-green">U.F.101 Creator</a>
+  </div>
+</div>
+
+<!-- ─── Main Layout ─── -->
+<div class="main-content">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <span>NOTAMs</span>
+      <span class="count" id="sidebar-count">0</span>
+    </div>
+    <div class="sidebar-content">
+      <!-- Legend -->
+      <div class="legend-section" id="legend-section">
+        <div class="legend-title">Legend (click to toggle)</div>
+      </div>
+      <!-- NOTAM list -->
+      <div class="legend-section">
+        <div class="legend-title">Positioned NOTAMs</div>
+      </div>
+      <div class="notam-list" id="notam-list"></div>
+    </div>
+  </div>
+
+  <!-- Map -->
+  <div class="map-wrap">
+    <div id="map"></div>
+
+    <!-- Stats overlay -->
+    <div class="map-info" id="map-info" style="display:none;">
+      <h3>Summary</h3>
+      <div class="stat"><span>Positioned NOTAMs</span><span class="stat-val" id="stat-notams">0</span></div>
+      <div class="stat"><span>Aerodromes</span><span class="stat-val" id="stat-aero">0</span></div>
+      <div class="stat"><span>With active NOTAMs</span><span class="stat-val" id="stat-aero-active">0</span></div>
+    </div>
+
+    <!-- Loading overlay -->
+    <div class="loading-overlay" id="loading-overlay">
+      <div class="spinner" id="loading-spinner"></div>
+      <div class="loading-text" id="loading-text">Connecting to NOTAM data source...</div>
+      <div class="loading-sub" id="loading-sub">This may take a few seconds</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// CONFIGURATION — Replace this URL after deploying the web app
+// ══════════════════════════════════════════════════════════════════
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwBmdEQ5BtntwxAblSM_4NPhLhepW3uwOVTLuGb55iz58IA7jzIgNK8NbqeHEcHC1mV/exec";
+
+// ══════════════════════════════════════════════════════════════════
+// Irish Aerodromes — reference data
+// ══════════════════════════════════════════════════════════════════
+const IRISH_AERODROMES = {
+  EIAB: { name: "Abbeyshrule", lat: 53.5892, lon: -7.6553 },
+  EIBN: { name: "Bantry", lat: 51.6686, lon: -9.4842 },
+  EIBR: { name: "Birr", lat: 53.0647, lon: -7.8897 },
+  EICA: { name: "Connemara", lat: 53.2303, lon: -9.4678 },
+  EICK: { name: "Cork", lat: 51.8413, lon: -8.4911 },
+  EICL: { name: "Clonbullogue", lat: 53.2481, lon: -7.1489 },
+  EICN: { name: "Coonagh", lat: 52.675, lon: -8.6833 },
+  EIDL: { name: "Donegal", lat: 55.0442, lon: -8.341 },
+  EIDW: { name: "Dublin International", lat: 53.4213, lon: -6.2701 },
+  EIIM: { name: "Inishmore", lat: 53.1068, lon: -9.6536 },
+  EIIR: { name: "Inisheer", lat: 53.0647, lon: -9.5108 },
+  EIKK: { name: "Kilkenny", lat: 52.6511, lon: -7.2961 },
+  EIKN: { name: "Ireland West (Knock)", lat: 53.9103, lon: -8.8186 },
+  EIKY: { name: "Kerry", lat: 52.1809, lon: -9.5238 },
+  EIMH: { name: "Athboy", lat: 53.6261, lon: -6.8714 },
+  EIMN: { name: "Inishmaan", lat: 53.0928, lon: -9.5686 },
+  EINC: { name: "Newcastle", lat: 53.0711, lon: -6.0453 },
+  EINN: { name: "Shannon", lat: 52.702, lon: -8.9248 },
+  EIRT: { name: "Rathcool", lat: 52.1236, lon: -8.9431 },
+  EISG: { name: "Sligo", lat: 54.2802, lon: -8.5992 },
+  EIWF: { name: "Waterford", lat: 52.1872, lon: -7.087 },
+  EIWT: { name: "Weston", lat: 53.3522, lon: -6.4861 },
+};
+
+// ══════════════════════════════════════════════════════════════════
+// NOTAM type configuration
+// ══════════════════════════════════════════════════════════════════
+const TYPE_CONFIG = {
+  crane:       { color: "#ef4444", label: "Cranes",       icon: "\u{1F3D7}" },
+  obstacle:    { color: "#f97316", label: "Obstacles",     icon: "\u26A0\uFE0F" },
+  mast:        { color: "#f59e0b", label: "Masts",         icon: "\u{1F4E1}" },
+  windfarm:    { color: "#22c55e", label: "Wind Farms",    icon: "\u{1F32C}" },
+  restriction: { color: "#dc2626", label: "Restrictions",  icon: "\u{1F6AB}" },
+  uas:         { color: "#8b5cf6", label: "UAS/Drones",    icon: "\u{1F6F8}" },
+  military:    { color: "#ec4899", label: "Military",      icon: "\u{1F3AF}" },
+  gliding:     { color: "#3b82f6", label: "Gliding",       icon: "\u{1FA82}" },
+  airfield:    { color: "#10b981", label: "Airfields",     icon: "\u{1F6EC}" },
+  other:       { color: "#6b7280", label: "Other",         icon: "\u{1F4CC}" },
+};
+
+// ══════════════════════════════════════════════════════════════════
+// Map setup
+// ══════════════════════════════════════════════════════════════════
+const map = L.map("map", {
+  center: [53.5, -7.5],
+  zoom: 7,
+  zoomControl: false,
+});
+
+L.control.zoom({ position: "bottomright" }).addTo(map);
+
+// Tile layers
+const tileLayers = {
+  dark: L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 19
+  }),
+  satellite: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    attribution: 'Tiles &copy; Esri', maxZoom: 19
+  }),
+  street: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; OpenStreetMap', maxZoom: 19
+  }),
+};
+
+let currentTileKey = "satellite";
+tileLayers.satellite.addTo(map);
+
+function setTiles(key) {
+  map.removeLayer(tileLayers[currentTileKey]);
+  tileLayers[key].addTo(map);
+  currentTileKey = key;
+  document.querySelectorAll(".tile-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("btn-" + key).classList.add("active");
+}
+
+// Layer groups
+const notamLayers = {};
+const visibility = {};
+let aeroLayer = L.layerGroup();
+let aeroVisible = true;
+
+// ══════════════════════════════════════════════════════════════════
+// PDF.js setup
+// ══════════════════════════════════════════════════════════════════
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ══════════════════════════════════════════════════════════════════
+// DMS coordinate parsing
+// ══════════════════════════════════════════════════════════════════
+function parseDMS(d, m, s, dir) {
+  let decimal = parseInt(d) + parseInt(m) / 60 + parseFloat(s) / 3600;
+  if (dir === "S" || dir === "W") decimal *= -1;
+  return Math.round(decimal * 1000000) / 1000000;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// NOTAM text classifier
+// ══════════════════════════════════════════════════════════════════
+function classifyNotam(text) {
+  const u = text.toUpperCase();
+  if (u.includes("CRANE")) return "crane";
+  if (u.includes("MAST") && !u.includes("MASTERPLAN")) return "mast";
+  if (u.includes("WIND FARM") || u.includes("WINDFARM") || u.includes("TURBINE")) return "windfarm";
+  if (u.includes("RESTRICT") || u.includes("TEMPORARY RESTRICTION")) return "restriction";
+  if (u.includes("HANG GLID") || u.includes("PARA GLID") || u.includes("GLIDING")) return "gliding";
+  if ((u.includes("AIRFIELD") || u.includes("AERODROME")) && u.includes("ADDED")) return "airfield";
+  if (u.includes("UAS") || u.includes("DRONE") || u.includes("UNMANNED")) return "uas";
+  if (u.includes("MILITARY") || u.includes("FIRING")) return "military";
+  return "other";
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Extract text from PDF using pdf.js
+// ══════════════════════════════════════════════════════════════════
+async function extractTextFromPdf(pdfData) {
+  const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+  let fullText = "";
+
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+
+    // Preserve line breaks by detecting Y-coordinate changes
+    let lastY = null;
+    let pageText = "";
+    for (const item of content.items) {
+      if (lastY !== null && Math.abs(item.transform[5] - lastY) > 3) {
+        pageText += "\n";
+      }
+      pageText += item.str;
+      lastY = item.transform[5];
+    }
+    fullText += pageText + "\n\n";
+  }
+
+  return fullText;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Parse positioned NOTAMs from extracted text
+// ══════════════════════════════════════════════════════════════════
+function extractPositionedNotams(text) {
+  // Isolate Ireland section (Shannon FIR) — before EGGX (Shanwick) section
+  const eggxMatch = text.match(/\nEGGX\s*[-\u2013\u2014]/);
+  const irelandText = eggxMatch ? text.substring(0, eggxMatch.index) : text;
+
+  // DMS coordinate pattern: DDMMSS.ssN DDDMMSS.ssW
+  const coordRegex = /(\d{2})(\d{2})(\d{2}(?:\.\d+)?)(N|S)\s*(\d{3})(\d{2})(\d{2}(?:\.\d+)?)(E|W)/g;
+
+  const notams = [];
+  const seenIds = new Set();
+  let match;
+
+  while ((match = coordRegex.exec(irelandText)) !== null) {
+    const lat = parseDMS(match[1], match[2], match[3], match[4]);
+    const lon = parseDMS(match[5], match[6], match[7], match[8]);
+
+    // Filter to Ireland region only
+    if (lat < 51 || lat > 56 || lon < -11 || lon > -5) continue;
+
+    // Get context around the coordinate
+    const ctxStart = Math.max(0, match.index - 400);
+    const ctxEnd = Math.min(irelandText.length, match.index + match[0].length + 400);
+    const context = irelandText.substring(ctxStart, ctxEnd);
+
+    // Extract NOTAM ID
+    const idMatch = context.match(/([ABNJ]\d{4}\/\d{2})/);
+    const id = idMatch ? idMatch[1] : null;
+
+    // Skip duplicates (same NOTAM ID)
+    if (id && seenIds.has(id)) continue;
+    if (id) seenIds.add(id);
+
+    // Classify type
+    const type = classifyNotam(context);
+
+    // Extract height/elevation
+    const heightMatch = context.match(/(?:ELEV(?:ATION)?|HEIGHT)[:\s]*(\d+\s*FT)/i);
+    const height = heightMatch ? heightMatch[1].replace(/\s+/g, "") : "";
+
+    // Extract dates
+    const fromMatch = context.match(/FROM:\s*([^\n]+)/i);
+    const toMatch = context.match(/TO:\s*([^\n]+)/i);
+
+    // Extract vertical limits
+    const upperMatch = context.match(/UPPER:\s*([^\n]+)/i);
+    const lowerMatch = context.match(/LOWER:\s*([^\n]+)/i);
+
+    // Clean description
+    const desc = context.replace(/\s+/g, " ").trim().substring(0, 400);
+
+    notams.push({
+      lat, lon, type,
+      id: id || "Unknown",
+      desc,
+      height,
+      from: fromMatch ? fromMatch[1].trim() : "",
+      to: toMatch ? toMatch[1].trim() : "",
+      upper: upperMatch ? upperMatch[1].trim() : "",
+      lower: lowerMatch ? lowerMatch[1].trim() : "",
+    });
+  }
+
+  return notams;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Parse aerodrome NOTAMs from extracted text
+// ══════════════════════════════════════════════════════════════════
+function extractAerodromeNotams(text) {
+  const irelandCodes = Object.keys(IRISH_AERODROMES);
+  const results = [];
+
+  for (const code of irelandCodes) {
+    const info = IRISH_AERODROMES[code];
+
+    // Count distinct NOTAM references near this aerodrome code
+    const codeRegex = new RegExp(code + "\\b", "g");
+    const notamIds = new Set();
+    const notamSnippets = [];
+    let m;
+
+    while ((m = codeRegex.exec(text)) !== null) {
+      // Get context after the code mention
+      const ctxEnd = Math.min(text.length, m.index + 200);
+      const snippet = text.substring(m.index, ctxEnd).replace(/\s+/g, " ").trim();
+
+      // Look for NOTAM IDs in this context
+      const idMatches = snippet.match(/[ABNJ]\d{4}\/\d{2}/g);
+      if (idMatches) {
+        idMatches.forEach(id => notamIds.add(id));
+      }
+
+      // Store unique snippets (skip near-duplicates)
+      const shortSnippet = snippet.substring(code.length).trim().substring(0, 120);
+      if (shortSnippet.length > 15 &&
+          !notamSnippets.some(s => s.substring(0, 40) === shortSnippet.substring(0, 40))) {
+        notamSnippets.push(shortSnippet);
+      }
+    }
+
+    // Use the higher count as the NOTAM count
+    const notamCount = Math.max(notamIds.size, 0);
+
+    results.push({
+      code,
+      name: info.name,
+      lat: info.lat,
+      lon: info.lon,
+      hasNotams: notamCount > 0,
+      notamCount,
+      notams: notamSnippets.slice(0, 10),
+    });
+  }
+
+  return results;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Render NOTAMs on the map
+// ══════════════════════════════════════════════════════════════════
+function renderNotams(notams, aerodromes) {
+  const legendEl = document.getElementById("legend-section");
+  const listEl = document.getElementById("notam-list");
+  const typeCounts = {};
+
+  notams.forEach(n => { typeCounts[n.type] = (typeCounts[n.type] || 0) + 1; });
+
+  // Build legend
+  Object.entries(TYPE_CONFIG).forEach(([type, config]) => {
+    const count = typeCounts[type] || 0;
+    if (count === 0) return;
+
+    visibility[type] = true;
+    const item = document.createElement("div");
+    item.className = "legend-item";
+    item.innerHTML = `
+      <div class="legend-dot" style="background:${config.color}"></div>
+      <span>${config.icon} ${config.label}</span>
+      <span class="legend-count">${count}</span>
+    `;
+    item.onclick = () => {
+      visibility[type] = !visibility[type];
+      item.classList.toggle("hidden");
+      if (notamLayers[type]) {
+        if (visibility[type]) map.addLayer(notamLayers[type]);
+        else map.removeLayer(notamLayers[type]);
+      }
+      updateSidebarCount(notams);
+    };
+    legendEl.appendChild(item);
+  });
+
+  // Add aerodrome toggle
+  const activeAero = aerodromes.filter(a => a.hasNotams).length;
+  const aeroItem = document.createElement("div");
+  aeroItem.className = "legend-item";
+  aeroItem.style.marginTop = "6px";
+  aeroItem.style.paddingTop = "6px";
+  aeroItem.style.borderTop = "1px solid #e5e7eb";
+  aeroItem.innerHTML = `
+    <div class="legend-dot" style="background:#2d6a1e;border:2px solid #fff;"></div>
+    <span>\u2708\uFE0F Aerodromes</span>
+    <span class="legend-count">${aerodromes.length}</span>
+  `;
+  aeroItem.onclick = () => {
+    aeroVisible = !aeroVisible;
+    aeroItem.classList.toggle("hidden");
+    if (aeroVisible) map.addLayer(aeroLayer);
+    else map.removeLayer(aeroLayer);
+  };
+  legendEl.appendChild(aeroItem);
+
+  // Create NOTAM markers
+  notams.forEach((notam, idx) => {
+    const config = TYPE_CONFIG[notam.type] || TYPE_CONFIG.other;
+
+    // Create map marker
+    const circle = L.circleMarker([notam.lat, notam.lon], {
+      radius: 7,
+      fillColor: config.color,
+      color: "#fff",
+      weight: 1.5,
+      opacity: 0.9,
+      fillOpacity: 0.75,
+    });
+
+    let popup = `<div class="popup-type">${config.icon} ${config.label}</div>`;
+    if (notam.id !== "Unknown") popup += `<div class="popup-title">${notam.id}</div>`;
+    popup += `<div class="popup-desc">${notam.desc.substring(0, 250)}</div>`;
+    if (notam.height) popup += `<div style="margin-top:4px;font-size:11px;">Height: <strong>${notam.height}</strong></div>`;
+    if (notam.upper || notam.lower) popup += `<div style="font-size:11px;">Limits: ${notam.lower || "?"} \u2192 ${notam.upper || "?"}</div>`;
+    if (notam.from || notam.to) popup += `<div class="popup-dates">From: ${notam.from}<br>To: ${notam.to}</div>`;
+
+    circle.bindPopup(popup, { maxWidth: 350 });
+
+    if (!notamLayers[notam.type]) notamLayers[notam.type] = L.layerGroup();
+    circle.addTo(notamLayers[notam.type]);
+
+    // Create sidebar card
+    const card = document.createElement("div");
+    card.className = "notam-card";
+    card.innerHTML = `
+      <div class="notam-card-header">
+        <span class="notam-card-id">${notam.id}</span>
+        <span class="notam-card-type" style="background:${config.color}20;color:${config.color}">${config.label}</span>
+      </div>
+      <div class="notam-card-desc">${notam.desc.substring(0, 100)}</div>
+      ${notam.height ? `<div class="notam-card-meta"><span>\u2195 ${notam.height}</span></div>` : ""}
+    `;
+    card.onclick = () => {
+      map.setView([notam.lat, notam.lon], 12);
+      circle.openPopup();
+    };
+    listEl.appendChild(card);
+  });
+
+  // Add all NOTAM layers to map
+  Object.values(notamLayers).forEach(layer => layer.addTo(map));
+
+  // Create aerodrome markers
+  aerodromes.forEach(aero => {
+    const color = aero.hasNotams ? "#2d6a1e" : "#9ca3af";
+    const size = aero.hasNotams ? 8 : 5;
+
+    const marker = L.circleMarker([aero.lat, aero.lon], {
+      radius: size,
+      fillColor: color,
+      color: "#fff",
+      weight: 2,
+      opacity: 1,
+      fillOpacity: 0.85,
+    });
+
+    // Tooltip with code (visible at higher zoom)
+    map.on("zoomend", () => {
+      if (map.getZoom() >= 8) {
+        marker.bindTooltip(
+          `<span style="font-size:10px;color:#374151;font-weight:600;">${aero.code}</span>`,
+          { permanent: true, direction: "right", offset: [8, 0], className: "aero-tooltip" }
+        );
+      } else {
+        marker.unbindTooltip();
+      }
+    });
+
+    let popup = `<div class="popup-title">${aero.code} \u2014 ${aero.name}</div>`;
+    if (aero.hasNotams) {
+      popup += `<div style="font-size:11px;color:#2d6a1e;margin-bottom:6px;font-weight:600;">${aero.notamCount} active NOTAM(s)</div>`;
+      aero.notams.forEach(n => {
+        popup += `<div class="popup-aero-notam">${n.substring(0, 150)}</div>`;
+      });
+    } else {
+      popup += `<div style="font-size:11px;color:#9ca3af;">No active NOTAMs</div>`;
+    }
+
+    marker.bindPopup(popup, { maxWidth: 380 });
+    marker.addTo(aeroLayer);
+  });
+
+  aeroLayer.addTo(map);
+
+  // Update stats
+  document.getElementById("stat-notams").textContent = notams.length;
+  document.getElementById("stat-aero").textContent = aerodromes.length;
+  document.getElementById("stat-aero-active").textContent = activeAero;
+  document.getElementById("map-info").style.display = "block";
+  updateSidebarCount(notams);
+}
+
+function updateSidebarCount(notams) {
+  let visible = 0;
+  notams.forEach(n => { if (visibility[n.type] !== false) visible++; });
+  document.getElementById("sidebar-count").textContent = visible;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Main: fetch PDF from Apps Script web app, parse, and render
+// ══════════════════════════════════════════════════════════════════
+async function main() {
+  const loadingText = document.getElementById("loading-text");
+  const loadingSub = document.getElementById("loading-sub");
+  const loadingSpinner = document.getElementById("loading-spinner");
+
+  try {
+    // 1. Fetch the PDF data from the Apps Script web app
+    loadingText.textContent = "Fetching latest NOTAM PDF...";
+    loadingSub.textContent = "Connecting to Google Apps Script";
+
+    const response = await fetch(WEBAPP_URL, { redirect: "follow" });
+
+    if (!response.ok) {
+      throw new Error("Failed to reach the NOTAM data source (HTTP " + response.status + ")");
+    }
+
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    if (!data.pdfBase64) {
+      throw new Error("No PDF data received. Make sure the daily downloader has run at least once.");
+    }
+
+    // 2. Decode the base64 PDF
+    loadingText.textContent = "Parsing NOTAM PDF...";
+    loadingSub.textContent = data.filename || "Extracting text from PDF";
+
+    const binaryString = atob(data.pdfBase64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    // 3. Extract text from PDF using pdf.js
+    loadingText.textContent = "Extracting NOTAM text...";
+    const fullText = await extractTextFromPdf(bytes);
+
+    // 4. Parse positioned NOTAMs
+    loadingText.textContent = "Identifying positioned NOTAMs...";
+    const notams = extractPositionedNotams(fullText);
+
+    // 5. Parse aerodrome NOTAMs
+    loadingText.textContent = "Scanning aerodrome NOTAMs...";
+    const aerodromes = extractAerodromeNotams(fullText);
+
+    // 6. Update the title with PIB info
+    const filenameMatch = (data.filename || "").match(/(\d{6})/);
+    if (filenameMatch) {
+      const dateStr = filenameMatch[1];
+      const day = dateStr.substring(4, 6);
+      const month = dateStr.substring(2, 4);
+      const year = "20" + dateStr.substring(0, 2);
+      const months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      document.getElementById("pib-subtitle").textContent =
+        `PIB Valid ${day} ${months[parseInt(month)]} ${year} \u2014 Shannon FIR (EISN)`;
+    }
+
+    // 7. Render everything on the map
+    renderNotams(notams, aerodromes);
+
+    // 8. Cache the result
+    try {
+      localStorage.setItem("notamCache", JSON.stringify({
+        filename: data.filename,
+        notams,
+        aerodromes,
+        cached: new Date().toISOString(),
+      }));
+    } catch(e) { /* localStorage might be full or disabled */ }
+
+    // 9. Hide loading overlay
+    document.getElementById("loading-overlay").classList.add("hidden");
+
+  } catch (error) {
+    console.error("NOTAM Map Error:", error);
+    loadingSpinner.style.display = "none";
+    loadingText.innerHTML = "";
+
+    // Try cached data
+    try {
+      const cached = JSON.parse(localStorage.getItem("notamCache"));
+      if (cached && cached.notams && cached.notams.length > 0) {
+        loadingSub.textContent = "Using cached data from " + new Date(cached.cached).toLocaleDateString();
+        renderNotams(cached.notams, cached.aerodromes || []);
+        document.getElementById("pib-subtitle").textContent = "Cached data \u2014 " + (cached.filename || "");
+        setTimeout(() => {
+          document.getElementById("loading-overlay").classList.add("hidden");
+        }, 1500);
+        return;
+      }
+    } catch(e) {}
+
+    loadingText.innerHTML = `<div class="error-msg">
+      <strong>Could not load NOTAM data</strong><br><br>
+      ${error.message}<br><br>
+      <span style="font-size:12px;color:#6b7280;">
+        Make sure:<br>
+        1. The Apps Script web app is deployed<br>
+        2. The WEBAPP_URL is set correctly in this page<br>
+        3. At least one NOTAM PDF has been downloaded to Drive
+      </span>
+    </div>`;
+    loadingSub.textContent = "";
+  }
+}
+
+// ═══ Start ═══
+main();
+</script>
+</body>
+</html>
